@@ -33,7 +33,7 @@ func (s *fileService) UploadFile(ctx context.Context, fileHeader *multipart.File
 	}
 	defer file.Close()
 
-	url, err := storage.UploadToR2(s.r2Client, file, fileHeader, bucketName, folderPath, isPublic)
+	url, key, err := storage.UploadToR2(s.r2Client, file, fileHeader, bucketName, folderPath, isPublic)
 	if err != nil {
 		return "", err
 	}
@@ -42,7 +42,10 @@ func (s *fileService) UploadFile(ctx context.Context, fileHeader *multipart.File
 		URL:   url,
 		Title: fileHeader.Filename,
 	})
+
 	if err != nil {
+		go storage.DeleteFromR2(s.r2Client, bucketName, key)
+
 		return "", err
 	}
 
