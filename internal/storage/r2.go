@@ -1,48 +1,38 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"mime/multipart"
 	"net/http"
-	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/supanut9/file-service/internal/config"
 )
 
-// Pass the file size and the multipart.File directly for streaming
-func UploadToR2(r2Client *s3.Client, file multipart.File, fileHeader *multipart.FileHeader, bucketName, folderPath string, isPublic bool) (string, string, error) {
+func UploadToR2(r2Client *s3.Client, r2Config config.R2Config, file multipart.File, fileHeader *multipart.FileHeader, bucketName, folderPath string, isPublic bool) (string, string, error) {
 	if bucketName == "" {
-		bucketName = os.Getenv("R2_BUCKET_NAME")
-		if bucketName == "" {
-			return "", "", fmt.Errorf("R2_BUCKET_NAME is not set and no bucketName provided")
-		}
+		return "", "", fmt.Errorf("bucketName cannot be empty")
 	}
 
-	head := make([]byte, 512)
-	_, err := file.Read(head)
-	if err != nil && err != io.EOF {
-		return "", "", fmt.Errorf("failed to read file header: %v", err)
+	buf := new(bytes.Buffer)
+	if _, err := buf.ReadFrom(file); err != nil {
+		return "", "", fmt.Errorf("failed to read file: %v", err)
 	}
 
-	if _, err := file.Seek(0, 0); err != nil {
-		return "", "", fmt.Errorf("failed to seek file: %v", err)
-	}
-
-	mimeType := http.DetectContentType(head)
+	mimeType := http.DetectContentType(buf.Bytes())
 	key := filepath.Join(folderPath, fmt.Sprintf("%d-%s", time.Now().Unix(), filepath.Base(fileHeader.Filename)))
 
-	_, err = r2Client.PutObject(context.TODO(), &s3.PutObjectInput{
-		Bucket:        aws.String(bucketName),
-		Key:           aws.String(key),
-		Body:          file,
-		ContentType:   aws.String(mimeType),
-		ContentLength: &fileHeader.Size,
+	_, err := r2Client.PutObject(context.TODO(), &s3.PutObjectInput{
+		Bucket:      aws.String(bucketName),
+		Key:         aws.String(key),
+		Body:        bytes.NewReader(buf.Bytes()),
+		ContentType: aws.String(mimeType),
 	})
 	if err != nil {
 		return "", "", fmt.Errorf("failed to upload to R2: %v", err)
@@ -50,30 +40,20 @@ func UploadToR2(r2Client *s3.Client, file multipart.File, fileHeader *multipart.
 
 	var fileURL string
 	if isPublic {
-		publicHost := os.Getenv("R2_PUBLIC_ENDPOINT")
-		if publicHost == "" {
-			publicHost = fmt.Sprintf("https://%s.r2.dev", bucketName)
-		}
+		publicHost := r2Config.PublicEndpoint
 		fileURL = fmt.Sprintf("%s/%s", publicHost, key)
 	} else {
-		endpoint := os.Getenv("R2_ENDPOINT")
-		if endpoint == "" {
-			accountId := os.Getenv("R2_ACCOUNT_ID")
-			endpoint = fmt.Sprintf("https://%s.r2.cloudflarestorage.com", accountId)
-		}
+		endpoint := fmt.Sprintf("https://%s.r2.cloudflarestorage.com", r2Config.AccountID)
 		fileURL = fmt.Sprintf("%s/%s/%s", endpoint, bucketName, key)
 	}
 
 	return fileURL, key, nil
 }
 
-func DeleteFromR2(r2Client *s3.Client, bucketName, key string) {
+func DeleteFromR2(r2Client *s3.Client, r2Config config.R2Config, bucketName, key string) {
 	if bucketName == "" {
-		bucketName = os.Getenv("R2_BUCKET_NAME")
-		if bucketName == "" {
-			log.Println("Error deleting orphaned file: R2_BUCKET_NAME is not set.")
-			return
-		}
+		log.Println("Error deleting orphaned file: bucketName is not set.")
+		return
 	}
 
 	log.Printf("Attempting to delete orphaned file from R2: %s", key)
@@ -81,7 +61,6 @@ func DeleteFromR2(r2Client *s3.Client, bucketName, key string) {
 		Bucket: aws.String(bucketName),
 		Key:    aws.String(key),
 	})
-
 	if err != nil {
 		log.Printf("Failed to delete orphaned file %s from R2: %v", key, err)
 	} else {

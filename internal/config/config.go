@@ -15,9 +15,18 @@ type DBConfig struct {
 	Name     string
 }
 
+type R2Config struct {
+	AccountID       string
+	AccessKeyID     string
+	SecretAccessKey string
+	BucketName      string
+	PublicEndpoint  string
+}
+
 type Config struct {
 	Port string
 	DB   DBConfig
+	R2   R2Config
 	URL  Url
 }
 
@@ -42,6 +51,13 @@ func Load() *Config {
 			User:     getEnv("DB_USER", "root"),
 			Password: getEnv("DB_PASSWORD", ""),
 			Name:     getEnv("DB_NAME", "shortlink"),
+		},
+		R2: R2Config{
+			AccountID:       getEnv("R2_ACCOUNT_ID", ""),
+			AccessKeyID:     getEnv("R2_ACCESS_KEY_ID", ""),
+			SecretAccessKey: getEnv("R2_SECRET_ACCESS_KEY", ""),
+			BucketName:      getEnv("R2_BUCKET_NAME", ""),
+			PublicEndpoint:  getEnv("R2_PUBLIC_ENDPOINT", ""),
 		},
 		URL: Url{
 			BaseUrl: getEnv("BASE_URL", "127.0.0.1"),
