@@ -4,6 +4,7 @@ import (
 	"context"
 	"mime/multipart"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/supanut9/file-service/internal/entity"
 	"github.com/supanut9/file-service/internal/repository"
 	"github.com/supanut9/file-service/internal/storage"
@@ -14,11 +15,15 @@ type FileService interface {
 }
 
 type fileService struct {
-	repo repository.FileRepository
+	repo     repository.FileRepository
+	r2Client *s3.Client
 }
 
-func NewFileService(repo repository.FileRepository) FileService {
-	return &fileService{repo: repo}
+func NewFileService(repo repository.FileRepository, r2Client *s3.Client) FileService {
+	return &fileService{
+		repo:     repo,
+		r2Client: r2Client,
+	}
 }
 
 func (s *fileService) UploadFile(ctx context.Context, fileHeader *multipart.FileHeader, bucketName string, folderPath string, isPublic bool) (string, error) {
@@ -28,7 +33,7 @@ func (s *fileService) UploadFile(ctx context.Context, fileHeader *multipart.File
 	}
 	defer file.Close()
 
-	url, err := storage.UploadToR2(file, fileHeader, bucketName, folderPath, isPublic)
+	url, err := storage.UploadToR2(s.r2Client, file, fileHeader, bucketName, folderPath, isPublic)
 	if err != nil {
 		return "", err
 	}

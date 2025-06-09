@@ -10,31 +10,33 @@ import (
 	"gorm.io/gorm"
 )
 
-var DB *gorm.DB
-
-func InitDB(cfg *config.DBConfig) {
-
+func InitDB(cfg *config.DBConfig) (*gorm.DB, error) {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
 		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Name,
 	)
 
-	var err error
-	DB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
-		log.Fatalf("❌ Failed to connect to database: %v", err)
+		return nil, fmt.Errorf("failed to connect to database: %v", err)
 	}
 
 	log.Println("✅ Connected to MySQL database")
 
-	Migrate() // 👈 ACTUALLY CALL the migrate function
+	err = migrate(db)
+	if err != nil {
+		return nil, err
+	}
+
+	return db, nil
 }
 
-func Migrate() {
-	err := DB.AutoMigrate(
+func migrate(db *gorm.DB) error {
+	err := db.AutoMigrate(
 		&entity.File{},
 	)
 	if err != nil {
-		log.Fatalf("❌ Failed to run DB migrations: %v", err)
+		return fmt.Errorf("failed to run DB migrations: %v", err)
 	}
 	log.Println("✅ Database migrated successfully")
+	return nil
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/supanut9/file-service/db"
@@ -13,11 +14,20 @@ func main() {
 	cfg := config.Load()
 	app := fiber.New()
 
-	db.InitDB(&cfg.DB)
+	// Initialize DB and get the instance
+	dbConn, err := db.InitDB(&cfg.DB)
+	if err != nil {
+		log.Fatalf("❌ Could not initialize database: %v", err)
+	}
 
-	config.InitR2()
+	// Initialize R2 and get the client instance
+	r2Client, err := config.NewR2Client()
+	if err != nil {
+		log.Fatalf("❌ Could not initialize R2 client: %v", err)
+	}
 
-	route.Setup(app)
+	// Pass the instances to the router setup
+	route.Setup(app, dbConn, r2Client)
 
 	fmt.Println("App running on port:", cfg.Port)
 	app.Listen(":" + cfg.Port)

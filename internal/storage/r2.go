@@ -12,11 +12,10 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/supanut9/file-service/internal/config"
 )
 
 // Pass the file size and the multipart.File directly for streaming
-func UploadToR2(file multipart.File, fileHeader *multipart.FileHeader, bucketName, folderPath string, isPublic bool) (string, error) {
+func UploadToR2(r2Client *s3.Client, file multipart.File, fileHeader *multipart.FileHeader, bucketName, folderPath string, isPublic bool) (string, error) {
 	if bucketName == "" {
 		bucketName = os.Getenv("R2_BUCKET_NAME")
 		if bucketName == "" {
@@ -37,7 +36,7 @@ func UploadToR2(file multipart.File, fileHeader *multipart.FileHeader, bucketNam
 	mimeType := http.DetectContentType(head)
 	key := filepath.Join(folderPath, fmt.Sprintf("%d-%s", time.Now().Unix(), filepath.Base(fileHeader.Filename)))
 
-	_, err = config.R2Client.PutObject(context.TODO(), &s3.PutObjectInput{
+	_, err = r2Client.PutObject(context.TODO(), &s3.PutObjectInput{
 		Bucket:        aws.String(bucketName),
 		Key:           aws.String(key),
 		Body:          file,
