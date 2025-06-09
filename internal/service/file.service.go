@@ -28,7 +28,7 @@ func (s *fileService) UploadFile(ctx context.Context, fileHeader *multipart.File
 	}
 	defer file.Close()
 
-	url, err := storage.UploadToR2(file, fileHeader.Filename, bucketName, folderPath, isPublic)
+	url, err := storage.UploadToR2(file, fileHeader, bucketName, folderPath, isPublic)
 	if err != nil {
 		return "", err
 	}
